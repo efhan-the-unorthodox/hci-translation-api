@@ -64,6 +64,29 @@ def _tokens_to_text_and_char_spans(
 
     return plain_text, char_spans
 
+def add_single_token_chunks(doc: spacy.tokens.Doc, spans: List[Tuple[str, int, int]]):
+    """
+    `spans` is a list of (label, start_i, end_i) where start_i/end_i are token indices
+    for NP and VP chunks.  Returns a **new list** that also includes
+    1-token chunks ("TOK") filling every gap.
+    """
+
+    # 1) Build a boolean mask of covered tokens
+    covered = [False] * len(doc)
+    for _, start, end in spans:
+        for i in range(start, end):  # end exclusive
+            covered[i] = True
+
+    # 2) Walk through tokens to add single-token gaps
+    final = spans[:]  # copy existing NP/VP spans
+    for i, tok in enumerate(doc):
+        if not covered[i]:
+            final.append(("TOK", i, i + 1))  # a 1-token span
+
+    # 3) Sort everything in reading order
+    final.sort(key=lambda t: t[1])  # by start token index
+
+    return final
 
 def _tokens_to_plaintext(oai_bpe_tokens: List[str]):
     """
@@ -144,31 +167,6 @@ def _extract_chunks(doc: spacy.tokens.Doc):
     all_spans = sorted(npvp_spans + remaining_spans, key=lambda s: s.start)
 
     return all_spans
-
-
-def add_single_token_chunks(doc: spacy.tokens.Doc, spans: List[Tuple[str, int, int]]):
-    """
-    `spans` is a list of (label, start_i, end_i) where start_i/end_i are token indices
-    for NP and VP chunks.  Returns a **new list** that also includes
-    1-token chunks ("TOK") filling every gap.
-    """
-
-    # 1) Build a boolean mask of covered tokens
-    covered = [False] * len(doc)
-    for _, start, end in spans:
-        for i in range(start, end):  # end exclusive
-            covered[i] = True
-
-    # 2) Walk through tokens to add single-token gaps
-    final = spans[:]  # copy existing NP/VP spans
-    for i, tok in enumerate(doc):
-        if not covered[i]:
-            final.append(("TOK", i, i + 1))  # a 1-token span
-
-    # 3) Sort everything in reading order
-    final.sort(key=lambda t: t[1])  # by start token index
-
-    return final
 
 
 def chunk_sentence(bpe_tokens: List[str]) -> Tuple[List[Dict], str]:

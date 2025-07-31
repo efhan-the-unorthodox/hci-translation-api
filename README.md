@@ -5,7 +5,7 @@
 1. Clone the repository:
 
    ```bash
-   git clone https://github.com/your-username/hci-back.git
+   git clone https://github.com/efhan-the-unorthodox/hci-translation-api.git
    cd hci-back
    ```
 
@@ -16,7 +16,7 @@
    ```
 3. Install dependencies:
    ```bash
-   pip install requirements.txt
+   pip install -r requirements.txt
    ```
 4. Create a `.env` file and add the OpenAI API key variable
    ```

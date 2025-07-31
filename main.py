@@ -49,6 +49,14 @@ def init_translation(transInput: TranslationInput):
     tokens, logrows = translate(transInput.input_sent, transl_frm=transInput.source_lang)
     chunks, plaintext = chunk_sentence(tokens)
     return {"chunks": chunks, "plaintext": plaintext}
+
+class ParaInput(BaseModel):
+    input_para: str
+    source_lang :str
+
+@app.post("/translate_para")
+def para_translation(paraInput:ParaInput):
+    return
     
 class AlternativeInput(BaseModel):
     chunk_text: str
@@ -56,7 +64,6 @@ class AlternativeInput(BaseModel):
     
 @app.post("/alternate_chunking")
 def generate_alternatives(data: AlternativeInput):
-    print(data)
     alt_resp = generate_alternate_phrasing(data.chunk_text, data.whole_sent)
     if isinstance(alt_resp, str):
         parsed_list = ast.literal_eval(alt_resp)

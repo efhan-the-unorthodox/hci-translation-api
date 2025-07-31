@@ -28,11 +28,19 @@ def translation_processing(response: ChatCompletion):
 
     return logprobs_tokens, logprobs_content  # caller can feed tokens to chunker
 
-
 def translate(input: str, model="gpt-4o", transl_frm="Chinese(Simplified)"):
 
     resp = translation_init(input, model, transl_frm)
-
+    
     tokens, rows = translation_processing(resp)
     
     return tokens, rows
+
+def translate_para(input:str, model="gpt-4o", transl_frm="Chinese(Simplified)"):
+    resp = translation_init(input, model, transl_frm)
+    
+    t_para = resp.choices[0].message.content
+    
+    print(t_para)
+    
+    return t_para
