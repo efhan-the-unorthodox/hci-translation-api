@@ -4,6 +4,7 @@ from pydantic import BaseModel
 from translator_pipe.p1_translator import *
 from translator_pipe.p2_chunking import *
 from translator_pipe.p4_alt_builder import *
+from translator_pipe.p1_5_sentence_segmt import *
 from fastapi.middleware.cors import CORSMiddleware
 import ast
 
@@ -56,7 +57,17 @@ class ParaInput(BaseModel):
 
 @app.post("/translate_para")
 def para_translation(paraInput:ParaInput):
-    return
+    tsl_para = translate_para(paraInput.input_para, transl_frm=paraInput.source_lang)
+    sentences = segment_para(tsl_para)
+    
+    return sentences
+    
+class SentInput(BaseModel):
+    input_sent:str 
+@app.post("/sentence_chunking")
+def generate_sent_chunks(sentInput:SentInput):
+    chunks = chunk_sentence_2(sentInput.input_sent)
+    return chunks
     
 class AlternativeInput(BaseModel):
     chunk_text: str
@@ -67,5 +78,4 @@ def generate_alternatives(data: AlternativeInput):
     alt_resp = generate_alternate_phrasing(data.chunk_text, data.whole_sent)
     if isinstance(alt_resp, str):
         parsed_list = ast.literal_eval(alt_resp)
-        print(parsed_list)
     return parsed_list

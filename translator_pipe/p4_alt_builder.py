@@ -96,7 +96,7 @@ def generate_alternate_phrasing(chunk:str, whole_sent:str, sug_count:int = 3):
         input=[
             {
                 "role": "user",
-                "content": f"Original sentence: {whole_sent}\nSuggest up to {sug_count} (where necessary) alternative phrasings for: {chunk}",
+                "content": f"Original sentence: {whole_sent}\nSuggest up to {sug_count} (where necessary) alternative phrasings for: '{chunk}'",
             },
         ],
     )

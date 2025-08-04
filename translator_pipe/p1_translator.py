@@ -41,6 +41,4 @@ def translate_para(input:str, model="gpt-4o", transl_frm="Chinese(Simplified)"):
     
     t_para = resp.choices[0].message.content
     
-    print(t_para)
-    
     return t_para

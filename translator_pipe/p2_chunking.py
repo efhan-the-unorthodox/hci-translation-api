@@ -204,3 +204,37 @@ def chunk_sentence(bpe_tokens: List[str]) -> Tuple[List[Dict], str]:
         )
 
     return results, plain_text
+
+
+def chunk_sentence_2(sentence: str) -> Tuple[List[Dict], str]:
+    """
+    Parameters
+    ----------
+    sentence : str
+        The original sentence
+    Returns
+    -------
+    chunks : List[dict]
+        Each dict has keys: id, label, text, span_tokens [start, end]
+    sentence : str
+        The original sentence (for debugging / display)
+    """
+    doc = _nlp(sentence)
+
+    chunks = _extract_chunks(doc)  # Chunk the entire freaking document
+
+    results = []
+    for idx, span in enumerate(chunks):
+        results.append(
+            {
+                "id": idx,
+                "label": span.label_ if span.label_ else "OTHER",
+                "text": span.text,
+                "tok_range": [
+                    span.start,
+                    span.end,
+                ],  # REMEMBER, the *end token* for any span from spaCy is exclusive when deriving the actual token text from the doc
+            }
+        )
+
+    return results
