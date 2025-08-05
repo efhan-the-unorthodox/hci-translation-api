@@ -157,34 +157,34 @@ async def receive_logs(log_data: LogData):
         payload = log_data.payload[0]  # Get the first payload item
         
         if log_data.message == "Translation started":
-            print(f"📝 User Input: {payload.get('userInput', 'N/A')}")
-            print(f"🌐 Source Language: {payload.get('sourceLang', 'N/A')}")
+            print(f"User Input: {payload.get('userInput', 'N/A')}")
+            print(f"Source Language: {payload.get('sourceLang', 'N/A')}")
             
         elif log_data.message == "Translation completed":
-            print(f"📝 Original Input: {payload.get('originalInput', 'N/A')}")
-            print(f"🌐 Source Language: {payload.get('sourceLang', 'N/A')}")
-            print(f"📊 Translated Sentences ({len(payload.get('translatedSentences', []))}):")
+            print(f"Original Input: {payload.get('originalInput', 'N/A')}")
+            print(f"Source Language: {payload.get('sourceLang', 'N/A')}")
+            print(f"Translated Sentences ({len(payload.get('translatedSentences', []))}):")
             for i, sentence in enumerate(payload.get('translatedSentences', [])):
                 print(f"  {i+1}. {sentence}")
-            print(f"🔧 Selected Chunks ({len(payload.get('selectedChunks', []))}):")
+            print(f"Selected Chunks ({len(payload.get('selectedChunks', []))}):")
             for i, chunk in enumerate(payload.get('selectedChunks', [])):
                 print(f"  {i+1}. Text: {chunk.get('text', 'N/A')}")
                 if chunk.get('alternatives'):
                     print(f"     Alternatives: {', '.join(chunk.get('alternatives', []))}")
                     
         elif log_data.message == "Chunk alternative selected":
-            print(f"🔧 Original Chunk: {payload.get('chunkText', 'N/A')}")
-            print(f"✅ Selected Alternative: {payload.get('selectedAlternative', 'N/A')}")
-            print(f"📄 Sentence Index: {payload.get('sentenceIndex', 'N/A')}")
-            print(f"🔢 Chunk Index: {payload.get('chunkIndex', 'N/A')}")
+            print(f"Original Chunk: {payload.get('NewChunk', 'N/A')}")
+            print(f"Selected Alternative: {payload.get('OldChunk', 'N/A')}")
+            print(f"Sentence Index: {payload.get('sentenceIndex', 'N/A')}")
+            print(f"Chunk Index: {payload.get('chunkIndex', 'N/A')}")
             
         elif log_data.message == "Complete sentence updated":
-            print(f"🔄 COMPLETE SENTENCE UPDATED")
-            print(f"📄 Sentence Index: {payload.get('sentenceIndex', 'N/A')}")
-            print(f"✨ New Complete Sentence: {payload.get('newSentence', 'N/A')}")
+            print(f"COMPLETE SENTENCE UPDATED")
+            print(f"Sentence Index: {payload.get('sentenceIndex', 'N/A')}")
+            print(f"New Complete Sentence: {payload.get('newSentence', 'N/A')}")
             
         else:
-            print(f"📦 Payload: {payload}")
+            print(f"Payload: {payload}")
     
     print(f"{'='*60}\n")
     
