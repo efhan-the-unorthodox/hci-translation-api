@@ -1,0 +1,1 @@
+web: gunicorn application:application --worker-class uvicorn.workers.UvicornWorker --timeout 120

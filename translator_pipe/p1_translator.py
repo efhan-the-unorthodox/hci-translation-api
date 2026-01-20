@@ -1,44 +1,22 @@
-import os, dotenv, json, math
-from openai import OpenAI
-from openai.types.chat import ChatCompletion
+"""
+`p1_translator.py` stub: OpenAI translation removed during refactor.
+"""
 
-dotenv.load_dotenv()
-client = OpenAI()
-secret_key = os.getenv("OPENAI_API_KEY")
+def translate(*args, **kwargs):
+    """Stub for sentence translation.
 
-
-def translation_init(input: str, model="gpt-4o", source_lang="Chinese(Simplified)"):
-    main_instruction = f"You are a translator and your objective is to translate from {source_lang} to English (United Kingdom). The response should only contain the translated text."
-    response = client.chat.completions.create(
-        model=model,
-        messages=[
-            {"role": "system", "content": main_instruction},
-            {"role": "user", "content": f"Please Translate:{input}"},
-        ],
-        logprobs=True,
-        top_logprobs=4,
+    Raises `NotImplementedError` while translation is being reworked.
+    """
+    raise NotImplementedError(
+        "translate() is disabled during refactor. Implement translation later."
     )
 
-    return response
 
+def translate_para(*args, **kwargs):
+    """Stub for paragraph translation.
 
-def translation_processing(response: ChatCompletion):
-    logprobs_content = response.choices[0].logprobs.content  # rows
-    logprobs_tokens = [row.token for row in logprobs_content]  # tokens
-
-    return logprobs_tokens, logprobs_content  # caller can feed tokens to chunker
-
-def translate(input: str, model="gpt-4o", transl_frm="Chinese(Simplified)"):
-
-    resp = translation_init(input, model, transl_frm)
-    
-    tokens, rows = translation_processing(resp)
-    
-    return tokens, rows
-
-def translate_para(input:str, model="gpt-4o", transl_frm="Chinese(Simplified)"):
-    resp = translation_init(input, model, transl_frm)
-    
-    t_para = resp.choices[0].message.content
-    
-    return t_para
+    Raises `NotImplementedError` while translation is being reworked.
+    """
+    raise NotImplementedError(
+        "translate_para() is disabled during refactor. Implement translation later."
+    )
