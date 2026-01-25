@@ -2,11 +2,16 @@ from typing import Union
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request, HTTPException
 from pydantic import BaseModel
 from translator_pipe.p0_preprocessing import *
-from translator_pipe.p3_chunking import *
-from translator_pipe.p4_alt_builder import *
+from translator_pipe.p3_chunking import tokenize_sentence
+from translator_pipe.p4_alt_builder import generate_alternate_phrasing
+from translator_pipe.p2_translator import translate
 from translator_pipe.p1_sentence_segmt import *
+from translator_pipe.context_store import (
+    build_project_index,
+    retrieve_context,
+    warm_project_index,
+)
 from fastapi.middleware.cors import CORSMiddleware
-import ast
 from datetime import datetime
 import json
 from fastapi import UploadFile, File, Form
@@ -114,6 +119,24 @@ class ProjectInfo(BaseModel):
     dateCreated: str
 
 
+def _load_projects() -> list[dict]:
+    if not PROJECTS_JSON_PATH.exists():
+        return []
+    with open(PROJECTS_JSON_PATH, "r", encoding="utf-8") as f:
+        try:
+            return json.load(f)
+        except json.JSONDecodeError:
+            return []
+
+
+def _find_project(project_id: str) -> dict | None:
+    projects_list = _load_projects()
+    for project in projects_list:
+        if project.get("id") == project_id:
+            return project
+    return None
+
+
 @app.post("/preprocessing")
 async def text_preprocessing(
     project_id: str = Form(...),
@@ -213,6 +236,15 @@ async def text_preprocessing(
     print(f"{'='*60}\n")
 
     # --- Save project data ---
+    project_dir = PROJECTS_FOLDER_PATH / project_id
+    project_dir.mkdir(parents=True, exist_ok=True)
+
+    # Save uploaded source document
+    source_ext = ext or file_format or "txt"
+    source_path = project_dir / f"source.{source_ext}"
+    with open(source_path, "wb") as f:
+        f.write(content)
+
     # 1. Append project info to projects.json
     project_record = {
         "id": project_id,
@@ -223,16 +255,14 @@ async def text_preprocessing(
         "documentName": documentName,
         "termBaseName": "",
         "lastEdit": dateCreated,
+        "projectPath": str(project_dir),
+        "sentencesPath": str(project_dir / "sentences.json"),
+        "sourcePath": str(source_path),
+        "indexPath": str(project_dir / "index"),
     }
 
     # Read existing projects, append new one, write back
-    projects_list = []
-    if PROJECTS_JSON_PATH.exists():
-        with open(PROJECTS_JSON_PATH, "r", encoding="utf-8") as f:
-            try:
-                projects_list = json.load(f)
-            except json.JSONDecodeError:
-                projects_list = []
+    projects_list = _load_projects()
 
     projects_list.append(project_record)
 
@@ -240,8 +270,6 @@ async def text_preprocessing(
         json.dump(projects_list, f, indent=4, ensure_ascii=False)
 
     # 2. Create sentences file in projects folder
-    PROJECTS_FOLDER_PATH.mkdir(parents=True, exist_ok=True)
-
     sentences_data = [
         {
             "id": idx,
@@ -252,9 +280,18 @@ async def text_preprocessing(
         for idx, sent in enumerate(sentences)
     ]
 
-    project_file_path = PROJECTS_FOLDER_PATH / f"{project_id}.json"
+    project_file_path = project_dir / "sentences.json"
     with open(project_file_path, "w", encoding="utf-8") as f:
         json.dump(sentences_data, f, indent=4, ensure_ascii=False)
+
+    # 3. Build embeddings index for document context
+    try:
+        build_project_index(project_dir, extracted_text)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to build project context index: {exc}",
+        )
 
     print(f"Project saved: {project_id} with {len(sentences)} sentences")
 
@@ -282,22 +319,34 @@ class ProjId(BaseModel):
     id: str
 
 
-@app.get("/sentences")
-def get_sentences(id: str):
+class LoadProjectInput(BaseModel):
+    project_id: str
+
+
+@app.post("/load_project")
+def load_project(data: LoadProjectInput):
     """
-    Return stored sentences for a given project id (404 if not found).
+    Return stored sentences for a given project id (404 if not found)
+    and warm the project context index.
     """
-    project_file = PROJECTS_FOLDER_PATH / f"{id}.json"
-    if not project_file.exists():
+    project = _find_project(data.project_id)
+    if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
+    project_dir = Path(project.get("projectPath", PROJECTS_FOLDER_PATH / data.project_id))
+    sentences_path = Path(project.get("sentencesPath", project_dir / "sentences.json"))
+    if not sentences_path.exists():
+        raise HTTPException(status_code=404, detail="Project sentences not found")
+
     try:
-        with open(project_file, "r", encoding="utf-8") as f:
+        with open(sentences_path, "r", encoding="utf-8") as f:
             sentences = json.load(f)
     except json.JSONDecodeError:
         raise HTTPException(status_code=500, detail="Project file is corrupted")
 
-    return sentences
+    warm_project_index(project_dir)
+
+    return {"sentences": sentences, "project": project}
 
 
 ## Translation-related endpoint temporarily disabled
@@ -310,25 +359,73 @@ def get_sentences(id: str):
 
 class SentInput(BaseModel):
     input_sent: str
+    lang: str | None = "en"
 
 
 @app.post("/sentence_chunking")
 def generate_sent_chunks(sentInput: SentInput):
-    chunks = chunk_sentence_2(sentInput.input_sent)
-    return chunks
+    tokens = tokenize_sentence(sentInput.input_sent, lang=sentInput.lang or "en")
+    return {"tokens": tokens}
 
 
 class AlternativeInput(BaseModel):
-    chunk_text: str
-    whole_sent: str
+    project_id: str
+    phrase: str
+    current_sentence: str
+    previous_sentence: str | None = None
+    next_sentence: str | None = None
 
 
-@app.post("/alternate_chunking")
+@app.post("/alternate_phrasing")
 def generate_alternatives(data: AlternativeInput):
-    alt_resp = generate_alternate_phrasing(data.chunk_text, data.whole_sent)
-    if isinstance(alt_resp, str):
-        parsed_list = ast.literal_eval(alt_resp)
-    return parsed_list
+    project = _find_project(data.project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    project_dir = Path(project.get("projectPath", PROJECTS_FOLDER_PATH / data.project_id))
+    context_chunks = retrieve_context(project_dir, data.current_sentence)
+    alternatives = generate_alternate_phrasing(
+        phrase=data.phrase,
+        current_sentence=data.current_sentence,
+        previous_sentence=data.previous_sentence,
+        next_sentence=data.next_sentence,
+        context_chunks=context_chunks,
+    )
+    return {"alternatives": alternatives}
+
+
+class TranslationInput(BaseModel):
+    project_id: str
+    input_sentence: str
+    previous_sentence: str | None = None
+    next_sentence: str | None = None
+
+
+@app.post("/translation")
+def translate_sentence(data: TranslationInput):
+    project = _find_project(data.project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    project_dir = Path(project.get("projectPath", PROJECTS_FOLDER_PATH / data.project_id))
+    context_chunks = retrieve_context(project_dir, data.input_sentence)
+    source_lang = project.get("sourceLanguage", "en")
+    dest_lang = project.get("destinationLanguage", "en")
+
+    translated = translate(
+        input_sentence=data.input_sentence,
+        source_lang=source_lang,
+        dest_lang=dest_lang,
+        previous_sentence=data.previous_sentence,
+        next_sentence=data.next_sentence,
+        context_chunks=context_chunks,
+    )
+    return {
+        "translation": translated,
+        "context_used": context_chunks,
+        "source_lang": source_lang,
+        "dest_lang": dest_lang,
+    }
 
 
 # Logging endpoint for frontend logs

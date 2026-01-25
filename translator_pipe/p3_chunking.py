@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import List, Tuple, Dict
+from typing import List, Tuple, Dict, Optional
 import spacy
 from spacy.matcher import Matcher
 from spacy.util import filter_spans
@@ -11,8 +11,25 @@ import logging
 # ------------------------------------------------------------------
 # For quick prototyping `en_core_web_sm` is enough.
 # Swap to 'en_core_web_trf' later for better accuracy.
-_nlp = spacy.load("en_core_web_sm", disable=["ner", "lemmatizer"])
-_nlp.enable_pipe("senter")  # keep sentence boundaries
+_NLP_CACHE: dict[str, spacy.language.Language] = {}
+
+
+def _get_spacy_pipeline(lang: str) -> spacy.language.Language:
+    lang = (lang or "en").lower()
+    if lang.startswith("zh"):
+        model = "zh_core_web_sm"
+    else:
+        model = "en_core_web_sm"
+
+    if model not in _NLP_CACHE:
+        nlp = spacy.load(model, disable=["ner", "lemmatizer"])
+        nlp.enable_pipe("senter")
+        _NLP_CACHE[model] = nlp
+
+    return _NLP_CACHE[model]
+
+
+_nlp = _get_spacy_pipeline("en")
 
 # Initialize the Matcher once (do this at module top)
 _matcher = Matcher(_nlp.vocab)
@@ -238,3 +255,25 @@ def chunk_sentence_2(sentence: str) -> Tuple[List[Dict], str]:
         )
 
     return results
+
+
+def tokenize_sentence(sentence: str, lang: Optional[str] = "en") -> List[str]:
+    """
+    Tokenize a sentence into a list of word tokens. Punctuation is merged with
+    the token immediately before it when possible.
+    """
+    if not sentence:
+        return []
+
+    nlp = _get_spacy_pipeline(lang or "en")
+    doc = nlp(sentence)
+
+    tokens: List[str] = []
+    for tok in doc:
+        text = tok.text
+        if tok.is_punct and tokens:
+            tokens[-1] = f"{tokens[-1]}{text}"
+        else:
+            tokens.append(text)
+
+    return tokens
