@@ -2,9 +2,9 @@ from typing import Union
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request, HTTPException
 from pydantic import BaseModel
 from translator_pipe.p0_preprocessing import *
-from translator_pipe.p2_chunking import *
+from translator_pipe.p3_chunking import *
 from translator_pipe.p4_alt_builder import *
-from translator_pipe.p1_5_sentence_segmt import *
+from translator_pipe.p1_sentence_segmt import *
 from fastapi.middleware.cors import CORSMiddleware
 import ast
 from datetime import datetime
