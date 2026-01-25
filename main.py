@@ -1,5 +1,5 @@
 from typing import Union
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request, HTTPException
 from pydantic import BaseModel
 from translator_pipe.p0_preprocessing import *
 from translator_pipe.p2_chunking import *
@@ -259,6 +259,45 @@ async def text_preprocessing(
     print(f"Project saved: {project_id} with {len(sentences)} sentences")
 
     return sentences_data
+
+
+@app.post("/projects")
+def get_projects():
+    """
+    Return stored project metadata from projects.json.
+    """
+    if not PROJECTS_JSON_PATH.exists():
+        return []
+
+    with open(PROJECTS_JSON_PATH, "r", encoding="utf-8") as f:
+        try:
+            projects_list = json.load(f)
+        except json.JSONDecodeError:
+            return []
+
+    return projects_list
+
+
+class ProjId(BaseModel):
+    id: str
+
+
+@app.get("/sentences")
+def get_sentences(id: str):
+    """
+    Return stored sentences for a given project id (404 if not found).
+    """
+    project_file = PROJECTS_FOLDER_PATH / f"{id}.json"
+    if not project_file.exists():
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    try:
+        with open(project_file, "r", encoding="utf-8") as f:
+            sentences = json.load(f)
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=500, detail="Project file is corrupted")
+
+    return sentences
 
 
 ## Translation-related endpoint temporarily disabled

@@ -7,3 +7,5 @@ venv
 .ebextensions
 .ebignore
 __pycache__
+projects/
+/projects.json
