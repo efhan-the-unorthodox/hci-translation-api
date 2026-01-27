@@ -42,10 +42,16 @@ def build_project_index(
     )
     docs = splitter.split_documents([Document(page_content=document_text)])
     embeddings = _get_embeddings()
-    vector_store = FAISS.from_documents(docs, embeddings)
+    try:
+        vector_store = FAISS.from_documents(docs, embeddings)
+    except Exception as e:
+        print("Failed to build FAISS vector store:", e)
+        raise
+    print("LINE 48", vector_store)
 
     index_dir = project_dir / "index"
     index_dir.mkdir(parents=True, exist_ok=True)
+    print("LINE 52", index_dir)
     vector_store.save_local(str(index_dir))
     _VECTOR_CACHE[index_dir] = vector_store
     return index_dir
@@ -69,9 +75,7 @@ def warm_project_index(project_dir: Path) -> bool:
     return _load_project_index(project_dir) is not None
 
 
-def retrieve_context(
-    project_dir: Path, query: str, k: int = 4
-) -> List[str]:
+def retrieve_context(project_dir: Path, query: str, k: int = 4) -> List[str]:
     vector_store = _load_project_index(project_dir)
     if not vector_store or not query:
         return []

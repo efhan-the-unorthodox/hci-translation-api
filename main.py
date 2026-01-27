@@ -1,4 +1,4 @@
-from typing import Union
+from typing import Union, Optional
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request, HTTPException
 from pydantic import BaseModel
 from translator_pipe.p0_preprocessing import *
@@ -129,7 +129,7 @@ def _load_projects() -> list[dict]:
             return []
 
 
-def _find_project(project_id: str) -> dict | None:
+def _find_project(project_id: str) -> Optional[dict]:
     projects_list = _load_projects()
     for project in projects_list:
         if project.get("id") == project_id:
@@ -333,7 +333,9 @@ def load_project(data: LoadProjectInput):
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    project_dir = Path(project.get("projectPath", PROJECTS_FOLDER_PATH / data.project_id))
+    project_dir = Path(
+        project.get("projectPath", PROJECTS_FOLDER_PATH / data.project_id)
+    )
     sentences_path = Path(project.get("sentencesPath", project_dir / "sentences.json"))
     if not sentences_path.exists():
         raise HTTPException(status_code=404, detail="Project sentences not found")
@@ -359,7 +361,7 @@ def load_project(data: LoadProjectInput):
 
 class SentInput(BaseModel):
     input_sent: str
-    lang: str | None = "en"
+    lang: Optional[str] = "en"
 
 
 @app.post("/sentence_chunking")
@@ -372,8 +374,8 @@ class AlternativeInput(BaseModel):
     project_id: str
     phrase: str
     current_sentence: str
-    previous_sentence: str | None = None
-    next_sentence: str | None = None
+    previous_sentence: Optional[str] = None
+    next_sentence: Optional[str] = None
 
 
 @app.post("/alternate_phrasing")
@@ -382,7 +384,9 @@ def generate_alternatives(data: AlternativeInput):
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    project_dir = Path(project.get("projectPath", PROJECTS_FOLDER_PATH / data.project_id))
+    project_dir = Path(
+        project.get("projectPath", PROJECTS_FOLDER_PATH / data.project_id)
+    )
     context_chunks = retrieve_context(project_dir, data.current_sentence)
     alternatives = generate_alternate_phrasing(
         phrase=data.phrase,
@@ -397,8 +401,8 @@ def generate_alternatives(data: AlternativeInput):
 class TranslationInput(BaseModel):
     project_id: str
     input_sentence: str
-    previous_sentence: str | None = None
-    next_sentence: str | None = None
+    previous_sentence: Optional[str] = None
+    next_sentence: Optional[str] = None
 
 
 @app.post("/translation")
@@ -407,7 +411,9 @@ def translate_sentence(data: TranslationInput):
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    project_dir = Path(project.get("projectPath", PROJECTS_FOLDER_PATH / data.project_id))
+    project_dir = Path(
+        project.get("projectPath", PROJECTS_FOLDER_PATH / data.project_id)
+    )
     context_chunks = retrieve_context(project_dir, data.input_sentence)
     source_lang = project.get("sourceLanguage", "en")
     dest_lang = project.get("destinationLanguage", "en")
