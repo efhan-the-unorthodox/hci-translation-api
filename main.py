@@ -1,10 +1,11 @@
 from typing import Union, Optional
+import os
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request, HTTPException
 from pydantic import BaseModel
 from translator_pipe.p0_preprocessing import *
-from translator_pipe.p3_chunking import tokenize_sentence
+from translator_pipe.p3_chunking import tokenize_sentence, chunk_sentence_2
 from translator_pipe.p4_alt_builder import generate_alternate_phrasing
-from translator_pipe.p2_translator import translate
+from translator_pipe.p2_translator import translate, translate_suggestions, generate_segment_alternatives
 from translator_pipe.p1_sentence_segmt import *
 from translator_pipe.context_store import (
     build_project_index,
@@ -17,7 +18,6 @@ import json
 from fastapi import UploadFile, File, Form
 import csv
 import io
-import os
 from pathlib import Path
 
 # Paths for project data storage
@@ -418,20 +418,103 @@ def translate_sentence(data: TranslationInput):
     source_lang = project.get("sourceLanguage", "en")
     dest_lang = project.get("destinationLanguage", "en")
 
-    translated = translate(
+    suggestions = translate_suggestions(
         input_sentence=data.input_sentence,
         source_lang=source_lang,
         dest_lang=dest_lang,
         previous_sentence=data.previous_sentence,
         next_sentence=data.next_sentence,
         context_chunks=context_chunks,
+        num_suggestions=3,
     )
     return {
-        "translation": translated,
+        "suggestions": suggestions,
         "context_used": context_chunks,
         "source_lang": source_lang,
         "dest_lang": dest_lang,
     }
+
+
+class ChunkSentenceInput(BaseModel):
+    translated_sentence: str
+    language: str = "zh-CN"  # Default to Chinese
+
+
+@app.post("/chunk-sentence")
+def chunk_sentence_endpoint(data: ChunkSentenceInput):
+    """
+    Chunk a translated sentence into linguistic segments.
+    Returns segments without alternatives (Phase 1).
+    """
+    try:
+        # Extract language code (zh-CN -> zh)
+        lang_code = data.language.split('-')[0] if '-' in data.language else data.language
+        
+        # Chunk the sentence with language parameter
+        chunks = chunk_sentence_2(data.translated_sentence, lang=lang_code)
+
+        # Format response - no alternatives in Phase 1
+        segments = []
+        for chunk in chunks:
+            segments.append({
+                "id": str(chunk["id"]),
+                "text": chunk["text"],
+                "label": chunk["label"],
+                "tok_range": chunk.get("tok_range", []),
+            })
+
+        return {
+            "segments": segments,
+            "language": data.language,
+        }
+    except Exception as e:
+        print(e)
+        raise HTTPException(status_code=500, detail=f"Chunking failed: {str(e)}")
+
+
+class GenerateSegmentAlternativesInput(BaseModel):
+    segment_text: str
+    full_sentence: str
+    segment_position: int
+    language: str = "zh-CN"
+
+
+@app.post("/generate-segment-alternatives")
+def generate_segment_alternatives_endpoint(data: GenerateSegmentAlternativesInput):
+    """
+    Generate alternative phrasings for a specific segment within a sentence.
+    Uses full sentence context for coherence.
+    """
+    try:
+        # Extract language code (zh-CN -> zh)
+        lang_code = data.language.split('-')[0] if '-' in data.language else data.language
+
+        # Map to language names for LLM
+        lang_map = {
+            "en": "English",
+            "zh": "Chinese (Simplified)"
+        }
+        dest_lang = lang_map.get(lang_code, "English")
+
+        # Generate alternatives
+        alternatives = generate_segment_alternatives(
+            segment_text=data.segment_text,
+            full_sentence=data.full_sentence,
+            position=data.segment_position,
+            language=dest_lang,
+            num_alternatives=3
+        )
+
+        return {
+            "alternatives": alternatives,
+            "segment_text": data.segment_text
+        }
+    except Exception as e:
+        print(e)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to generate alternatives: {str(e)}"
+        )
 
 
 # Logging endpoint for frontend logs

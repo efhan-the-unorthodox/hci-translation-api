@@ -1,34 +1,50 @@
 from __future__ import annotations
 
-import os
+import time
 from pathlib import Path
 from typing import List, Optional
 
-from dotenv import load_dotenv
+import torch
 from langchain_core.documents import Document
-from langchain_openai import OpenAIEmbeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import FAISS
 
-load_dotenv()
-
-HF_API_KEY = os.getenv("HF_API_KEY")
-HF_BASE_URL = "https://router.huggingface.co/v1"
-HF_EMBEDDING_MODEL = os.getenv(
-    "HF_EMBEDDING_MODEL", "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
-)
-
 _VECTOR_CACHE: dict[Path, FAISS] = {}
 
+from langchain_huggingface import HuggingFaceEmbeddings
 
-def _get_embeddings() -> OpenAIEmbeddings:
-    if not HF_API_KEY:
-        raise ValueError("HF_API_KEY is not set in the environment.")
-    return OpenAIEmbeddings(
-        model=HF_EMBEDDING_MODEL,
-        base_url=HF_BASE_URL,
-        api_key=HF_API_KEY,
+
+def _get_embeddings():
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    # Note: model_kwargs are passed to SentenceTransformer, which then has its own
+    # model_kwargs passed to the underlying transformer model
+    return HuggingFaceEmbeddings(
+        model_name="intfloat/multilingual-e5-small",
+        model_kwargs={
+            "device": device,
+        }
     )
+
+
+def faiss_from_documents_batched(docs, embeddings, batch_size=32) -> FAISS:
+    # Build from first batch, then add the rest incrementally
+    vs = FAISS.from_documents(docs[:batch_size], embeddings)
+    for i in range(batch_size, len(docs), batch_size):
+        vs.add_documents(docs[i : i + batch_size])
+    return vs
+
+
+def with_retries(fn, tries=4, base_sleep=1.0):
+    last = None
+    for attempt in range(tries):
+        try:
+            return fn()
+        except Exception as e:
+            last = e
+            if attempt == tries - 1:
+                raise
+            time.sleep(base_sleep * (2**attempt))
+    raise last
 
 
 def build_project_index(
@@ -51,7 +67,6 @@ def build_project_index(
 
     index_dir = project_dir / "index"
     index_dir.mkdir(parents=True, exist_ok=True)
-    print("LINE 52", index_dir)
     vector_store.save_local(str(index_dir))
     _VECTOR_CACHE[index_dir] = vector_store
     return index_dir
