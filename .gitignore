@@ -8,3 +8,4 @@ venv
 .ebignore
 __pycache__
 req.txt
+/projects

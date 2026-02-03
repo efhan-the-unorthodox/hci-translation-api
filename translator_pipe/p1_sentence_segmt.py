@@ -39,6 +39,8 @@ def segment_para(para: str, lang: Optional[str] = "en") -> List[str]:
         ll = lang.strip().lower()
         if ll.startswith("zh"):
             code = "zh"
+        elif ll.startswith("ja"):
+            code = "ja"
         elif ll.startswith("en"):
             code = "en"
 

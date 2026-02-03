@@ -1,5 +1,6 @@
 from typing import Union, Optional
 import os
+import shutil
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request, HTTPException
 from pydantic import BaseModel
 from translator_pipe.p0_preprocessing import *
@@ -351,6 +352,34 @@ def load_project(data: LoadProjectInput):
     return {"sentences": sentences, "project": project}
 
 
+@app.post("/delete_project")
+def delete_project(data: LoadProjectInput):
+    """
+    Delete a project: remove its folder and entry from projects.json.
+    """
+    project = _find_project(data.project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    # Get project directory path
+    project_dir = Path(
+        project.get("projectPath", PROJECTS_FOLDER_PATH / data.project_id)
+    )
+
+    # Remove project folder if it exists
+    if project_dir.exists():
+        shutil.rmtree(project_dir)
+
+    # Remove from projects.json
+    projects_list = _load_projects()
+    projects_list = [p for p in projects_list if p.get("id") != data.project_id]
+
+    with open(PROJECTS_JSON_PATH, "w", encoding="utf-8") as f:
+        json.dump(projects_list, f, indent=4, ensure_ascii=False)
+
+    return {"status": "deleted", "project_id": data.project_id}
+
+
 ## Translation-related endpoint temporarily disabled
 ## @app.post("/translate_para")
 ## def para_translation(paraInput: ParaInput):
@@ -492,7 +521,8 @@ def generate_segment_alternatives_endpoint(data: GenerateSegmentAlternativesInpu
         # Map to language names for LLM
         lang_map = {
             "en": "English",
-            "zh": "Chinese (Simplified)"
+            "zh": "Chinese (Simplified)",
+            "ja": "Japanese"
         }
         dest_lang = lang_map.get(lang_code, "English")
 

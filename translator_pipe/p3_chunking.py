@@ -18,6 +18,8 @@ def _get_spacy_pipeline(lang: str) -> spacy.language.Language:
     lang = (lang or "en").lower()
     if lang.startswith("zh"):
         model = "zh_core_web_sm"
+    elif lang.startswith("ja"):
+        model = "ja_core_news_sm"
     else:
         model = "en_core_web_sm"
 
